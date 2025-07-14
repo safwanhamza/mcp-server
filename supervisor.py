@@ -2,10 +2,10 @@ from langchain_groq import ChatGroq
 from groq import Groq
 import os
 
-os.environ["GROQ_API_KEY"] = "YOUR_API_HERE"
+os.environ["GROQ_API_KEY"] = "YOUR_API_HERE"  #inser yor api key here
 
 llm = ChatGroq(
-    model_name="llama3-70b-8192",
+    model_name="llama3-70b-8192",    # select model here
     temperature=0.2,
     max_tokens=2048,
 )
