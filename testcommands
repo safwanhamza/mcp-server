@@ -1,3 +1,4 @@
+#__!bin/bash cmd on win or console on mac or shell on lin__#
 https://b19dfb0b-a1b9-4f9c-9a4c-f1b9276db6b0-00-1ko82fqkxum7x.pike.replit.dev/
 curl "https://b19dfb0b-a1b9-4f9c-9a4c-f1b9276db6b0-00-1ko82fqkxum7x.pike.replit.dev/test-epc/SW1A2AA"
 curl -X POST https://b19dfb0b-a1b9-4f9c-9a4c-f1b9276db6b0-00-1ko82fqkxum7x.pike.replit.dev/process-epc -H "Content-Type: multipart/form-data" -F "file=@input.csv"
