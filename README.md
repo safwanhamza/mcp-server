@@ -8,6 +8,7 @@
 4. **EPC Data Retrieval**: For each postcode, the API fetches all relevant EPC certificates (domestic and non-domestic) with pagination.
 5. **Result Generation**: The API generates a processed CSV with EPC data appended, and a summary of the results.
 6. **Download**: The user receives a summary and a secure download link for the processed file.
+7. 
 
 ---
 
@@ -142,3 +143,4 @@ Download EPC Results - a button linking to https://your-api.com/download/<file_i
 4. Add authentication of API server (if applicable)
 
 ---
+
