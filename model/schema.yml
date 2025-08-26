@@ -1,0 +1,95 @@
+# schema.yml  –  Swagger/OpenAPI 3.0 components (JSON‑Schema style)
+components:
+  schemas:
+    Design:
+      type: object
+      required: [id, title, width, height, pages]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        pages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Page'
+
+    Page:
+      type: object
+      required: [id, index, elements]
+      properties:
+        id:
+          type: string
+          format: uuid
+        index:
+          type: integer
+        elements:
+          type: array
+          items:
+            $ref: '#/components/schemas/Element'
+
+    Element:
+      type: object
+      required: [id, type, x, y, width, height]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [image, text, shape, frame, chart]
+        x:
+          type: number
+        y:
+          type: number
+        width:
+          type: number
+        height:
+          type: number
+        rotation:
+          type: number
+          default: 0
+        # Type‑specific attrs are in a free‑form map
+        properties:
+          type: object
+          additionalProperties: true
+
+    Asset:
+      type: object
+      required: [id, url, mime, width, height]
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        mime:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        thumbnailUrl:
+          type: string
+          format: uri
+
+    ExportRequest:
+      type: object
+      required: [format]
+      properties:
+        format:
+          type: string
+          enum: [png, jpg, pdf, svg]
+        pages:
+          type: array
+          items:
+            type: integer
+        dpi:
+          type: integer
+          default: 300
