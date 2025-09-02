@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Parakeet Live (WS + Worklet)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <style>
+    :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    body{margin:24px}
+    .row{display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+    button{padding:10px 16px;border:1px solid #ddd;border-radius:8px;cursor:pointer}
+    button.primary{background:#0ea5e9;color:#fff;border-color:#0ea5e9}
+    #status{font-size:14px;color:#666}
+    textarea{width:100%;padding:12px;border:1px solid #ddd;border-radius:8px}
+    #partial{height:160px} #final{height:280px}
+    .cols{display:grid;grid-template-columns:1fr;gap:16px}
+    @media (min-width:960px){.cols{grid-template-columns:1fr 1fr}}
+    label{font-weight:600;display:block;margin-bottom:6px}
+  </style>
+</head>
+<body>
+  <h2>🎙️ Parakeet (Remote GPU) — Live Transcription</h2>
+  <div class="row">
+    <button id="start" class="primary">Start</button>
+    <button id="stop">Stop</button>
+    <span id="status" class="muted">idle</span>
+  </div>
+
+  <div class="cols">
+    <div>
+      <label for="partial">Intermediate (live)</label>
+      <textarea id="partial" readonly></textarea>
+    </div>
+    <div>
+      <label for="final">Final (session)</label>
+      <textarea id="final" readonly></textarea>
+    </div>
+  </div>
+
+<script>
+const statusEl = document.getElementById('status');
+const partialEl = document.getElementById('partial');
+const finalEl = document.getElementById('final');
+let es=null, ws=null, ac=null, workletNode=null, mediaStream=null;
+
+function connectSSE(){
+  if(es) return;
+  es = new EventSource('/events');
+  es.onmessage = (e)=>{
+    try{
+      const p = JSON.parse(e.data);
+      if ('status' in p) statusEl.textContent = p.status;
+      if ('partial' in p) { partialEl.value = p.partial || ''; if(p.partial) statusEl.textContent='listening…'; }
+      if ('final' in p)   finalEl.value   = p.final || '';
+    }catch(_){}
+  };
+}
+
+async function start(){
+  connectSSE();
+  await fetch('/start', {method:'POST'});
+
+  // Speech-friendly constraints (AEC/NS). Supported properties vary by browser.
+  // See MDN for constraint behavior and capabilities.
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      channelCount: 1,
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: false,
+      voiceIsolation: true,         // Safari may honor this
+    }
+  });
+  mediaStream = stream;
+
+  ac = new (window.AudioContext || window.webkitAudioContext)();
+  // AudioWorklet runs on its own thread for reliable, low-latency processing.
+  // (ScriptProcessorNode is deprecated.)
+  const workletCode = `
+    class PCMOut extends AudioWorkletProcessor {
+      constructor(){
+        super();
+        this._tmp = new Float32Array(0);
+      }
+      process(inputs, outputs, params){
+        const chs = inputs[0];
+        if (chs && chs[0] && chs[0].length){
+          const f32 = chs[0]; // mono
+          const frame = new Float32Array(f32.length);
+          frame.set(f32);
+          this.port.postMessage(frame, [frame.buffer]); // transfer ownership (zero-copy)
+        }
+        return true;
+      }
+    }
+    registerProcessor('pcm-out', PCMOut);
+  `;
+  const blob = new Blob([workletCode], {type:'application/javascript'});
+  await ac.audioWorklet.addModule(URL.createObjectURL(blob));
+
+  const src = ac.createMediaStreamSource(stream);
+  workletNode = new AudioWorkletNode(ac, 'pcm-out', {numberOfInputs:1, numberOfOutputs:0, channelCount:1});
+
+  // Build graph: mic -> worklet (no connection to speakers to avoid echo)
+  src.connect(workletNode);
+
+  // Open WS (binary)
+  const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${scheme}://${location.host}/ws`);
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = ()=>{
+    // Advertise the true capture rate (ac.sampleRate is typically 48000)
+    ws.send(JSON.stringify({op:'hello', sampleRate: ac.sampleRate}));
+    statusEl.textContent = 'mic_connected';
+  };
+
+  // Batch ~20ms at the device rate before sending (keeps network efficient).
+  const batchMs = 20;
+  const devRate = ac.sampleRate;
+  const batchSamples = Math.round(devRate * batchMs / 1000);
+  let acc = new Float32Array(0);
+
+  workletNode.port.onmessage = (evt)=>{
+    const frame = evt.data; // Float32Array from worklet
+    // Simple concatenation/batching
+    const joined = new Float32Array(acc.length + frame.length);
+    joined.set(acc, 0);
+    joined.set(frame, acc.length);
+    acc = joined;
+
+    while (acc.length >= batchSamples){
+      const send = acc.slice(0, batchSamples);
+      acc = acc.slice(batchSamples);
+      if (ws && ws.readyState === WebSocket.OPEN){
+        ws.send(send.buffer);
+      }
+    }
+  };
+
+  statusEl.textContent = 'started';
+  partialEl.value = ''; finalEl.value = '';
+}
+
+async function stop(){
+  await fetch('/stop', {method:'POST'});
+  try { workletNode && workletNode.disconnect(); } catch {}
+  try { mediaStream && mediaStream.getTracks().forEach(t=>t.stop()); } catch {}
+  try { ac && ac.close(); } catch {}
+  try { ws && ws.close(); } catch {}
+  statusEl.textContent = 'stopped';
+}
+
+document.getElementById('start').onclick = start;
+document.getElementById('stop').onclick = stop;
+
+connectSSE();
+</script>
+</body>
+</html>
