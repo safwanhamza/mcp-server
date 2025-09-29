@@ -1,6 +1,5 @@
 # Scene and Presenter preset dictionaries for first-iteration dropdowns.
 # These names match your UI labels; keys are machine-safe slugs.
-
 SCENE_SETTINGS = [
     ("modern_minimalist_apartment", "Modern Minimalist Apartment"),
     ("cozy_home_office", "Cozy Home Office"),
